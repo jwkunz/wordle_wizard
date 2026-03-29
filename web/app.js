@@ -662,3 +662,70 @@ export function bootApp({ engine }) {
     setError(`Failed to initialize background engine: ${error}`);
   });
 }
+
+export function createDirectEngine({ init, WasmSolver, wasmSource }) {
+  let initialized = false;
+  let solver = null;
+
+  async function ensureInitialized() {
+    if (initialized) {
+      return;
+    }
+
+    if (wasmSource === undefined) {
+      await init();
+    } else {
+      await init(wasmSource);
+    }
+
+    initialized = true;
+  }
+
+  function requireSolver() {
+    if (!solver) {
+      throw new Error("Engine is not initialized with an active solver.");
+    }
+    return solver;
+  }
+
+  function collectView(candidateOnly) {
+    const activeSolver = requireSolver();
+    return {
+      snapshot: activeSolver.snapshot(),
+      recommendations: activeSolver.topRecommendations(12, candidateOnly),
+      candidates: activeSolver.remainingCandidates(24),
+      dictionary: activeSolver.dictionaryStatus(),
+    };
+  }
+
+  return {
+    async init() {
+      await ensureInitialized();
+    },
+    async loadBundled(payload) {
+      await ensureInitialized();
+      solver = new WasmSolver();
+      return collectView(Boolean(payload.candidateOnly));
+    },
+    async loadRemote(payload) {
+      await ensureInitialized();
+      solver = WasmSolver.fromWordLists(payload.words, payload.words);
+      return collectView(Boolean(payload.candidateOnly));
+    },
+    async newGame(payload) {
+      await ensureInitialized();
+      solver =
+        payload.kind === "remote"
+          ? WasmSolver.fromWordLists(payload.words, payload.words)
+          : new WasmSolver();
+      return collectView(Boolean(payload.candidateOnly));
+    },
+    async applyFeedback(payload) {
+      requireSolver().applyFeedback(payload.guess, payload.feedback);
+      return collectView(Boolean(payload.candidateOnly));
+    },
+    async refresh(payload) {
+      return collectView(Boolean(payload.candidateOnly));
+    },
+  };
+}

@@ -38,6 +38,8 @@ const wasmBytes = Uint8Array.from(atob(wasmBase64), (char) => char.charCodeAt(0)
 
 setupWorker({ init: __wbg_init, WasmSolver, wasmSource: wasmBytes });
 `)};
+const pkgSource = ${JSON.stringify(pkgSource)};
+const wasmBase64 = ${JSON.stringify(wasmBase64)};
 
 function createWorkerEngine(workerUrl) {
   const worker = new Worker(workerUrl, { type: "module" });
@@ -91,12 +93,33 @@ function createWorkerEngine(workerUrl) {
 
 const appUrl = URL.createObjectURL(new Blob([appSource], { type: "text/javascript" }));
 const workerUrl = URL.createObjectURL(new Blob([workerModuleSource], { type: "text/javascript" }));
+const pkgUrl = URL.createObjectURL(new Blob([pkgSource], { type: "text/javascript" }));
 
 try {
-  const { bootApp } = await import(appUrl);
-  bootApp({ engine: createWorkerEngine(workerUrl) });
+  const [{ bootApp, createDirectEngine }, { default: init, WasmSolver }] = await Promise.all([
+    import(appUrl),
+    import(pkgUrl),
+  ]);
+
+  const wasmBytes = Uint8Array.from(atob(wasmBase64), (char) => char.charCodeAt(0));
+
+  let engine;
+  if (window.location.protocol === "file:") {
+    engine = createDirectEngine({ init, WasmSolver, wasmSource: wasmBytes });
+  } else {
+    try {
+      engine = createWorkerEngine(workerUrl);
+      await engine.init();
+    } catch (error) {
+      console.warn("Falling back to direct engine mode for single-file build:", error);
+      engine = createDirectEngine({ init, WasmSolver, wasmSource: wasmBytes });
+    }
+  }
+
+  bootApp({ engine });
 } finally {
   URL.revokeObjectURL(appUrl);
+  URL.revokeObjectURL(pkgUrl);
 }
 `.trim();
 
