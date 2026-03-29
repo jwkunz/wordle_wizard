@@ -25,13 +25,15 @@ function normalizeWordList(rawWords) {
 function slugFromUrl(url) {
   try {
     const parsed = new URL(url);
-    return `${parsed.hostname}${parsed.pathname}`.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    return `${parsed.hostname}${parsed.pathname}`
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
   } catch {
     return url.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   }
 }
 
-export function bootApp({ init, WasmSolver, wasmSource }) {
+export function bootApp({ engine }) {
   const elements = {
     guessForm: document.querySelector("#guess-form"),
     guessInput: document.querySelector("#guess-input"),
@@ -61,7 +63,6 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     tabPanels: [...document.querySelectorAll("[data-tab-panel]")],
   };
 
-  let solver;
   let activeDictionaryKey = null;
 
   function setEngineStatus(state, detail) {
@@ -153,12 +154,11 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     const nextEntries = store.entries.filter((item) => item.key !== key);
     nextEntries.unshift(entry);
 
-    const nextStore = {
+    writeCacheStore({
       activeKey: key,
       entries: nextEntries,
-    };
+    });
 
-    writeCacheStore(nextStore);
     return entry;
   }
 
@@ -176,10 +176,12 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     const nextEntries = store.entries.filter((entry) => entry.key !== key);
     const nextActiveKey =
       store.activeKey === key ? (nextEntries[0]?.key ?? null) : store.activeKey;
+
     writeCacheStore({
       activeKey: nextActiveKey,
       entries: nextEntries,
     });
+
     activeDictionaryKey = nextActiveKey;
   }
 
@@ -238,7 +240,7 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
   function syncEditorLetters() {
     const guess = elements.guessInput.value.trim().toUpperCase();
     [...elements.feedbackEditor.querySelectorAll(".tile")].forEach((tile, index) => {
-      tile.textContent = guess[index] ?? " ";
+      tile.textContent = guess[index] ?? "";
     });
   }
 
@@ -301,46 +303,14 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     }
   }
 
-  function renderPendingNewGameUi() {
-    elements.historyList.replaceChildren();
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "Starting a fresh puzzle. Recommendations will repopulate when the engine finishes recalculating.";
-    elements.historyList.append(empty);
-
-    elements.roundLabel.textContent = "No guesses yet";
-    elements.candidateList.replaceChildren();
-    elements.candidateCount.textContent = "Recomputing candidates...";
-    elements.recommendationsBody.replaceChildren();
-    elements.remainingAnswersStat.textContent = "...";
-    elements.allowedGuessesStat.textContent = "...";
-  }
-
-  function createBundledSolver() {
-    activeDictionaryKey = null;
-    return new WasmSolver();
-  }
-
-  function createRemoteSolver(words) {
-    return WasmSolver.fromWordLists(words, words);
-  }
-
-  async function refresh() {
-    const snapshot = await solver.snapshot();
-    const recommendations = await solver.topRecommendations(
-      12,
-      elements.candidateOnlyToggle.checked,
-    );
-    const candidates = await solver.remainingCandidates(24);
-    const dictionary = await solver.dictionaryStatus();
-
-    elements.remainingAnswersStat.textContent = String(snapshot.remaining_answers);
-    elements.allowedGuessesStat.textContent = String(snapshot.remaining_guesses);
-    elements.dictionarySourceStat.textContent = dictionary.guesses_source;
+  function applyEngineView(view) {
+    elements.remainingAnswersStat.textContent = String(view.snapshot.remaining_answers);
+    elements.allowedGuessesStat.textContent = String(view.snapshot.remaining_guesses);
+    elements.dictionarySourceStat.textContent = view.dictionary.guesses_source;
     elements.diagnostics.textContent = JSON.stringify(
       {
-        snapshot,
-        dictionary,
+        snapshot: view.snapshot,
+        dictionary: view.dictionary,
         activeDictionaryKey,
         cacheStore: readCacheStore(),
         feedbackPreview: currentFeedback(),
@@ -349,9 +319,9 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
       2,
     );
 
-    renderHistory(snapshot);
-    renderRecommendations(recommendations);
-    renderCandidates(candidates);
+    renderHistory(view.snapshot);
+    renderRecommendations(view.recommendations);
+    renderCandidates(view.candidates);
     renderCacheList();
   }
 
@@ -363,60 +333,89 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     });
   }
 
+  function renderPendingNewGameUi() {
+    elements.historyList.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent =
+      "Starting a fresh puzzle. Recommendations will repopulate when the engine finishes recalculating.";
+    elements.historyList.append(empty);
+
+    elements.roundLabel.textContent = "No guesses yet";
+    elements.candidateList.replaceChildren();
+    elements.candidateCount.textContent = "Recomputing candidates...";
+    elements.recommendationsBody.replaceChildren();
+    elements.remainingAnswersStat.textContent = "...";
+    elements.allowedGuessesStat.textContent = "...";
+  }
+
   async function yieldForPaint() {
     await new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
+  function currentCandidateOnly() {
+    return elements.candidateOnlyToggle.checked;
+  }
+
   async function activateBundledDictionary() {
-    await runWithStatus(
+    resetFeedbackEditor();
+    const view = await runWithStatus(
       "Loading bundled dictionary and recomputing recommendations...",
-      async () => {
-        solver = createBundledSolver();
-        elements.dictionarySelect.value = "bundled";
-        resetFeedbackEditor();
-        await refresh();
-      },
+      () => engine.loadBundled({ candidateOnly: currentCandidateOnly() }),
       "Idle. Bundled dictionary loaded.",
     );
+    activeDictionaryKey = null;
+    elements.dictionarySelect.value = "bundled";
+    applyEngineView(view);
   }
 
   async function activateCachedEntry(entry) {
-    await runWithStatus(
+    resetFeedbackEditor();
+    const view = await runWithStatus(
       `Loading cached dictionary from ${entry.url}...`,
-      async () => {
-        solver = createRemoteSolver(entry.words);
-        activeDictionaryKey = entry.key;
-        setActiveCacheKey(entry.key);
-        elements.dictionarySelect.value = "remote";
-        elements.remoteDictionaryUrl.value = entry.url;
-        resetFeedbackEditor();
-        await refresh();
-      },
+      () =>
+        engine.loadRemote({
+          words: entry.words,
+          candidateOnly: currentCandidateOnly(),
+        }),
       `Idle. Loaded cached dictionary from ${entry.url}.`,
     );
+    activeDictionaryKey = entry.key;
+    setActiveCacheKey(entry.key);
+    elements.dictionarySelect.value = "remote";
+    elements.remoteDictionaryUrl.value = entry.url;
+    applyEngineView(view);
   }
 
   async function boot() {
     await runWithStatus(
-      "Initializing WASM engine...",
+      "Initializing background engine worker...",
       async () => {
-        if (wasmSource === undefined) {
-          await init();
-        } else {
-          await init(wasmSource);
-        }
-
+        await engine.init();
         syncEditorLetters();
         renderCacheList();
 
         const cachedEntry = getActiveCachedEntry();
         if (cachedEntry) {
-          await activateCachedEntry(cachedEntry);
+          activeDictionaryKey = cachedEntry.key;
+          setActiveCacheKey(cachedEntry.key);
+          elements.dictionarySelect.value = "remote";
+          elements.remoteDictionaryUrl.value = cachedEntry.url;
+          const view = await engine.loadRemote({
+            words: cachedEntry.words,
+            candidateOnly: currentCandidateOnly(),
+          });
+          resetFeedbackEditor();
+          applyEngineView(view);
           return;
         }
 
-        solver = createBundledSolver();
-        await refresh();
+        elements.dictionarySelect.value = "bundled";
+        const view = await engine.loadBundled({
+          candidateOnly: currentCandidateOnly(),
+        });
+        resetFeedbackEditor();
+        applyEngineView(view);
       },
       "Idle. Engine initialized and ready.",
     );
@@ -451,15 +450,18 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     event.preventDefault();
 
     try {
-      await runWithStatus(
+      const view = await runWithStatus(
         "Applying feedback and recomputing recommendations...",
-        async () => {
-          await solver.applyFeedback(elements.guessInput.value.trim(), currentFeedback());
-          resetFeedbackEditor();
-          await refresh();
-        },
+        () =>
+          engine.applyFeedback({
+            guess: elements.guessInput.value.trim(),
+            feedback: currentFeedback(),
+            candidateOnly: currentCandidateOnly(),
+          }),
         "Idle. Feedback applied.",
       );
+      resetFeedbackEditor();
+      applyEngineView(view);
     } catch (error) {
       setError(String(error));
     }
@@ -472,22 +474,26 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
       setWorking("Starting a new game and recomputing recommendations...");
       await yieldForPaint();
 
-      await runWithStatus(
-        "Resetting current session...",
-        async () => {
-          const activeEntry = activeDictionaryKey ? getCachedEntry(activeDictionaryKey) : null;
-          if (activeEntry) {
-            solver = createRemoteSolver(activeEntry.words);
-            elements.dictionarySelect.value = "remote";
-            elements.remoteDictionaryUrl.value = activeEntry.url;
-          } else {
-            solver = createBundledSolver();
-            elements.dictionarySelect.value = "bundled";
-          }
-          await refresh();
-        },
+      const activeEntry = activeDictionaryKey ? getCachedEntry(activeDictionaryKey) : null;
+      const view = await runWithStatus(
+        "Resetting current puzzle in the background engine...",
+        () =>
+          engine.newGame({
+            kind: activeEntry ? "remote" : "bundled",
+            words: activeEntry?.words,
+            candidateOnly: currentCandidateOnly(),
+          }),
         "Idle. New game ready.",
       );
+
+      if (activeEntry) {
+        elements.dictionarySelect.value = "remote";
+        elements.remoteDictionaryUrl.value = activeEntry.url;
+      } else {
+        elements.dictionarySelect.value = "bundled";
+      }
+
+      applyEngineView(view);
     } catch (error) {
       setError(String(error));
     }
@@ -495,11 +501,12 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
 
   elements.candidateOnlyToggle.addEventListener("change", async () => {
     try {
-      await runWithStatus(
+      const view = await runWithStatus(
         "Updating recommendation ranking...",
-        refresh,
+        () => engine.refresh({ candidateOnly: currentCandidateOnly() }),
         "Idle. Recommendation ranking updated.",
       );
+      applyEngineView(view);
     } catch (error) {
       setError(String(error));
     }
@@ -531,7 +538,7 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
     }
 
     try {
-      await runWithStatus(
+      const entry = await runWithStatus(
         `Fetching remote dictionary from ${url}...`,
         async () => {
           const response = await fetch(url);
@@ -539,11 +546,12 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
             throw new Error(`HTTP ${response.status}`);
           }
 
-          const entry = upsertCachedDictionary(url, await response.text());
-          await activateCachedEntry(entry);
+          return upsertCachedDictionary(url, await response.text());
         },
         `Idle. Remote dictionary fetched and cached from ${url}.`,
       );
+
+      await activateCachedEntry(entry);
     } catch (error) {
       setError(`Failed to load remote dictionary: ${error}`);
     }
@@ -561,17 +569,9 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
 
   elements.clearAllCacheButton.addEventListener("click", async () => {
     try {
-      await runWithStatus(
-        "Clearing cached dictionaries...",
-        async () => {
-          clearAllCachedDictionaries();
-          solver = createBundledSolver();
-          elements.dictionarySelect.value = "bundled";
-          resetFeedbackEditor();
-          await refresh();
-        },
-        "Idle. Cleared all cached dictionaries.",
-      );
+      clearAllCachedDictionaries();
+      await activateBundledDictionary();
+      setIdle("Idle. Cleared all cached dictionaries.");
     } catch (error) {
       setError(String(error));
     }
@@ -602,31 +602,21 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
 
     if (action === "remove") {
       try {
-        await runWithStatus(
-          "Removing cached dictionary...",
-          async () => {
-            const wasActive = activeDictionaryKey === key;
-            removeCachedDictionary(key);
-            if (wasActive) {
-              const nextEntry = getActiveCachedEntry();
-              if (nextEntry) {
-                solver = createRemoteSolver(nextEntry.words);
-                activeDictionaryKey = nextEntry.key;
-                setActiveCacheKey(nextEntry.key);
-                elements.dictionarySelect.value = "remote";
-                elements.remoteDictionaryUrl.value = nextEntry.url;
-              } else {
-                solver = createBundledSolver();
-                elements.dictionarySelect.value = "bundled";
-              }
-              resetFeedbackEditor();
-              await refresh();
-            } else {
-              renderCacheList();
-            }
-          },
-          "Idle. Cached dictionary removed.",
-        );
+        const wasActive = activeDictionaryKey === key;
+        removeCachedDictionary(key);
+
+        if (wasActive) {
+          const nextEntry = getActiveCachedEntry();
+          if (nextEntry) {
+            await activateCachedEntry(nextEntry);
+          } else {
+            await activateBundledDictionary();
+            setIdle("Idle. Removed the active cached dictionary and reverted to bundled.");
+          }
+        } else {
+          renderCacheList();
+          setIdle("Idle. Cached dictionary removed.");
+        }
       } catch (error) {
         setError(String(error));
       }
@@ -634,6 +624,6 @@ export function bootApp({ init, WasmSolver, wasmSource }) {
   });
 
   boot().catch((error) => {
-    setError(`Failed to initialize WASM engine: ${error}`);
+    setError(`Failed to initialize background engine: ${error}`);
   });
 }
