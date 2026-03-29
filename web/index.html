@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wordle Wizard</title>
+    <style>
+      :root {
+        --bg: #1e1e1e;
+        --bg-alt: #181818;
+        --panel: #252526;
+        --panel-alt: #2d2d30;
+        --ink: #d4d4d4;
+        --muted: #9da3aa;
+        --line: #3c3c3c;
+        --accent: #0e639c;
+        --accent-strong: #1177bb;
+        --accent-soft: rgba(14, 99, 156, 0.2);
+        --danger: #c74e39;
+        --miss: #3a3d41;
+        --present: #b89500;
+        --correct: #2d7d46;
+        --shadow: rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(14, 99, 156, 0.15), transparent 28%),
+          radial-gradient(circle at top right, rgba(199, 78, 57, 0.1), transparent 22%),
+          linear-gradient(180deg, #1b1b1c 0%, #111112 100%);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      select,
+      input {
+        color: var(--ink);
+      }
+
+      .shell {
+        max-width: 1260px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-family: "IBM Plex Serif", Georgia, serif;
+        font-size: clamp(2rem, 3vw, 3rem);
+        letter-spacing: 0.02em;
+      }
+
+      .brand p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        max-width: 720px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .panel,
+      .stat,
+      .toolbar > *,
+      .tab-button {
+        background: linear-gradient(180deg, rgba(45, 45, 48, 0.98), rgba(37, 37, 38, 0.98));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 16px 40px var(--shadow);
+      }
+
+      .toolbar select,
+      .toolbar button,
+      .tab-button {
+        padding: 11px 14px;
+        background-color: transparent;
+        cursor: pointer;
+      }
+
+      .tab-strip {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .status-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(45, 45, 48, 0.98), rgba(37, 37, 38, 0.98));
+        box-shadow: 0 16px 40px var(--shadow);
+      }
+
+      .status-bar strong {
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 0.88rem;
+      }
+
+      .status-bar[data-state="idle"] strong {
+        color: #4ec9b0;
+      }
+
+      .status-bar[data-state="working"] strong {
+        color: #dcdcaa;
+      }
+
+      .status-bar[data-state="error"] strong {
+        color: #f48771;
+      }
+
+      .status-detail {
+        color: var(--muted);
+      }
+
+      .tab-button.is-active {
+        border-color: var(--accent-strong);
+        background: linear-gradient(180deg, rgba(17, 119, 187, 0.3), rgba(14, 99, 156, 0.18));
+      }
+
+      .tab-panel[hidden] {
+        display: none;
+      }
+
+      .layout {
+        display: grid;
+        gap: 20px;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .panel h2 {
+        margin: 0 0 14px;
+        font-size: 1.08rem;
+      }
+
+      .guess-form,
+      .stack,
+      .help-copy {
+        display: grid;
+        gap: 14px;
+      }
+
+      .guess-row,
+      .inline-form,
+      .cache-row,
+      .help-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .guess-row input,
+      .inline-form input {
+        flex: 1;
+        min-width: 220px;
+        padding: 13px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--bg-alt);
+      }
+
+      .guess-row button,
+      .inline-form button,
+      .cache-actions button,
+      .danger-button {
+        padding: 12px 15px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+      }
+
+      .danger-button,
+      .cache-actions button[data-action="remove"] {
+        background: var(--danger);
+      }
+
+      .tile-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .tile {
+        aspect-ratio: 1;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: var(--panel-alt);
+        color: var(--ink);
+      }
+
+      .tile[data-state="miss"] {
+        background: var(--miss);
+      }
+
+      .tile[data-state="present"] {
+        background: var(--present);
+        color: #111112;
+      }
+
+      .tile[data-state="correct"] {
+        background: var(--correct);
+        color: white;
+      }
+
+      .history {
+        display: grid;
+        gap: 12px;
+      }
+
+      .empty-state {
+        padding: 14px;
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        background: var(--bg-alt);
+        color: var(--muted);
+      }
+
+      .history-head,
+      .recommendations-head,
+      .candidate-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .stats {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-bottom: 16px;
+      }
+
+      .stat {
+        padding: 14px;
+      }
+
+      .stat span {
+        color: var(--muted);
+      }
+
+      .stat strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.3rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .candidates,
+      .cache-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        border: 1px solid rgba(17, 119, 187, 0.3);
+      }
+
+      details {
+        margin-top: 18px;
+      }
+
+      summary {
+        cursor: pointer;
+        color: #9cdcfe;
+        font-weight: 600;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--ink);
+      }
+
+      .cache-entry {
+        width: 100%;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--bg-alt);
+      }
+
+      .cache-entry.is-active {
+        border-color: var(--accent-strong);
+        box-shadow: inset 0 0 0 1px rgba(17, 119, 187, 0.25);
+      }
+
+      .cache-meta {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .cache-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .help-layout {
+        display: grid;
+        gap: 20px;
+      }
+
+      .help-panel {
+        padding: 20px;
+      }
+
+      .help-panel h2,
+      .help-panel h3 {
+        margin-top: 0;
+      }
+
+      .help-copy p,
+      .help-copy li {
+        line-height: 1.55;
+      }
+
+      .help-copy ol,
+      .help-copy ul {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      code {
+        font-family: "IBM Plex Mono", "Consolas", monospace;
+      }
+
+      @media (max-width: 960px) {
+        .layout,
+        .stats {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Wordle Wizard</h1>
+          <p>Wordle analyst console with a Rust/WASM solver, inspectable candidate sets, and managed cached dictionaries.</p>
+        </div>
+        <div class="toolbar">
+          <select id="dictionary-select" aria-label="Dictionary">
+            <option value="bundled" selected>Bundled Medium List</option>
+            <option value="remote">Cached Remote List</option>
+          </select>
+          <button id="reset-button" type="button">New Game</button>
+        </div>
+      </header>
+
+      <nav class="tab-strip" aria-label="Main tabs">
+        <button class="tab-button is-active" id="tab-workspace" type="button" data-tab="workspace">Workspace</button>
+        <button class="tab-button" id="tab-help" type="button" data-tab="help">Help</button>
+      </nav>
+
+      <section class="status-bar" id="engine-status-bar" data-state="idle" aria-live="polite">
+        <strong id="engine-status-label">Idle</strong>
+        <span class="status-detail" id="engine-status-detail">Engine ready for new commands.</span>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="workspace">
+        <section class="layout">
+          <div>
+            <section class="panel">
+              <h2>Current Guess</h2>
+              <form id="guess-form" class="guess-form">
+                <div class="guess-row">
+                  <input id="guess-input" type="text" maxlength="5" placeholder="enter your first guess" value="" />
+                  <button type="submit">Apply Feedback</button>
+                </div>
+                <div id="feedback-editor" class="tile-row" aria-label="Feedback editor">
+                  <button class="tile" type="button" data-index="0" data-state="miss"></button>
+                  <button class="tile" type="button" data-index="1" data-state="miss"></button>
+                  <button class="tile" type="button" data-index="2" data-state="miss"></button>
+                  <button class="tile" type="button" data-index="3" data-state="miss"></button>
+                  <button class="tile" type="button" data-index="4" data-state="miss"></button>
+                </div>
+              </form>
+            </section>
+
+          <section class="panel">
+            <div class="history-head">
+              <h2>History</h2>
+              <span id="round-label">No guesses yet</span>
+            </div>
+            <div id="history-list" class="history"></div>
+          </section>
+
+            <section class="panel">
+              <div class="candidate-head">
+                <h2>Remaining Candidates</h2>
+                <span id="candidate-count">0 answers</span>
+              </div>
+              <div id="candidate-list" class="candidates"></div>
+              <details>
+                <summary>Diagnostics</summary>
+                <pre id="diagnostics-panel">Loading engine state...</pre>
+              </details>
+            </section>
+
+            <section class="panel">
+              <h2>Dictionary Loader</h2>
+              <div class="stack">
+                <p>Remote lists are cached locally, restored automatically on refresh, and filtered down to unique lowercase 5-letter alphabetic words before the solver uses them.</p>
+                <form id="remote-dictionary-form" class="inline-form">
+                  <input
+                    id="remote-dictionary-url"
+                    type="url"
+                    placeholder="https://example.com/words.txt"
+                    value="https://raw.githubusercontent.com/tabatkins/wordle-list/main/words"
+                  />
+                  <button type="submit">Fetch And Cache</button>
+                </form>
+                <div class="cache-row">
+                  <button id="reload-cached-button" type="button">Load Active Cache</button>
+                  <button id="clear-all-cache-button" class="danger-button" type="button">Clear All Cached Dictionaries</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside>
+            <section class="panel">
+              <div class="stats">
+                <div class="stat">
+                  <span>Remaining answers</span>
+                  <strong id="remaining-answers-stat">0</strong>
+                </div>
+                <div class="stat">
+                  <span>Allowed guesses</span>
+                  <strong id="allowed-guesses-stat">0</strong>
+                </div>
+                <div class="stat">
+                  <span>Dictionary source</span>
+                  <strong id="dictionary-source-stat">Bundled</strong>
+                </div>
+              </div>
+
+              <div class="recommendations-head">
+                <h2>Recommendations</h2>
+                <label>
+                  <input id="candidate-only-toggle" type="checkbox" />
+                  Candidate only
+                </label>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Word</th>
+                    <th>Entropy</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody id="recommendations-body"></tbody>
+              </table>
+            </section>
+
+            <section class="panel">
+              <div class="candidate-head">
+                <h2>Cached Dictionaries</h2>
+                <span id="cache-count-label">0 cached</span>
+              </div>
+              <div id="cache-list" class="cache-list"></div>
+            </section>
+          </aside>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="help" hidden>
+        <div class="help-layout">
+          <section class="panel help-panel">
+            <h2>How To Use Wordle Wizard</h2>
+            <div class="help-copy">
+              <p>This app is an external Wordle advisor. You play Wordle somewhere else, then use this page to record each guess and the feedback you received. The solver keeps track of the remaining valid answers and ranks good next guesses.</p>
+              <ol>
+                <li>Enter the exact 5-letter guess you used in the <code>Current Guess</code> box.</li>
+                <li>Click each feedback tile until it matches the game result: grey for miss, yellow for present, green for correct.</li>
+                <li>Press <code>Apply Feedback</code>. The history, candidate list, and recommendations update immediately.</li>
+                <li>Repeat for each round until the candidate set is small enough or you solve the puzzle.</li>
+              </ol>
+            </div>
+          </section>
+
+          <section class="panel help-panel">
+            <h3>Reading The Main Panels</h3>
+            <div class="help-copy">
+              <p><strong>History</strong> shows every guess you have already entered. This is the fastest way to confirm the solver state matches your external game.</p>
+              <p><strong>Remaining Candidates</strong> shows answers still consistent with all entered feedback.</p>
+              <p><strong>Recommendations</strong> ranks next guesses by entropy. If you enable <code>Candidate only</code>, the list is restricted to words that are still possible answers. Leave it off if you want exploratory probe guesses.</p>
+              <p><strong>Diagnostics</strong> exposes the current state in a more raw format for debugging and validation.</p>
+            </div>
+          </section>
+
+          <section class="panel help-panel">
+            <h3>Dictionary Behavior</h3>
+            <div class="help-copy">
+              <p>The bundled dictionary is always available. Remote dictionaries are optional.</p>
+              <ul>
+                <li>When you fetch a remote word list, the app caches it in browser storage.</li>
+                <li>On refresh, the app now tries to restore the active cached remote dictionary automatically.</li>
+                <li>The cache manager reports every saved dictionary, when it was stored, and how many filtered 5-letter words it contains.</li>
+                <li>You can activate a cached dictionary, remove a single cached dictionary, or clear the cache entirely.</li>
+              </ul>
+              <p>If a remote source contains mixed content, only unique lowercase 5-letter alphabetic words are kept.</p>
+            </div>
+          </section>
+
+          <section class="panel help-panel">
+            <h3>Common Workflow</h3>
+            <div class="help-copy">
+              <p>A good default workflow is:</p>
+              <ol>
+                <li>Open the workspace tab.</li>
+                <li>Choose the bundled list or load a cached remote dictionary.</li>
+                <li>Enter one guess at a time from your live game.</li>
+                <li>Use the recommendations table to choose either the strongest information-gain probe or a remaining candidate.</li>
+                <li>Press <code>New Game</code> when you start a new puzzle. New Game keeps the active dictionary and clears only the current puzzle state.</li>
+              </ol>
+            </div>
+          </section>
+
+          <section class="panel help-panel">
+            <h3>New Game vs Dictionary Changes</h3>
+            <div class="help-copy">
+              <p><strong>New Game</strong> means: keep the currently selected dictionary, clear the entered guess history, clear the feedback editor, and return the solver to a fresh puzzle state.</p>
+              <p>Changing the dictionary is a separate action. If you switch from bundled to cached remote, or activate a different cached remote dictionary, you are changing the solver’s word bank as well as starting from a fresh puzzle state.</p>
+              <p>So in practical terms: if you are starting the next daily Wordle with the same word list, click <code>New Game</code>. If you want to analyze with a different word list, change dictionaries instead.</p>
+            </div>
+          </section>
+
+          <section class="panel help-panel">
+            <h3>Engine Status Bar</h3>
+            <div class="help-copy">
+              <p>The status bar above the workspace reports what the engine is doing right now.</p>
+              <ul>
+                <li><strong>Idle</strong> in green means the solver is ready for another command.</li>
+                <li><strong>Working</strong> in yellow means the app is fetching a dictionary, rebuilding solver state, or recomputing recommendations.</li>
+                <li><strong>Error</strong> in red means the last operation failed and the detail text explains what went wrong.</li>
+              </ul>
+              <p>If the solver feels latent on a larger dictionary, watch the status bar first. That is the intended place to tell whether the app is still processing versus waiting for user input.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
