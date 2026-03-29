@@ -6,7 +6,7 @@ Rust rewrite of the legacy `wordle_bot` solver with a planned WASM engine and br
 
 - `src/`: Rust solver core.
 - `web/`: static HTML shell for the future web app.
-- `data/`: bundled word lists for the engine.
+- `data/`: bundled word lists for the engine. The shipped default now uses the Tab Atkins Wordle list.
 - `original/`: ignored clone of the legacy C++ project used as a reference during the rewrite.
 
 ## Near-Term Direction
