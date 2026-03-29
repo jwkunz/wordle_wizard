@@ -1,6 +1,6 @@
 # Wordle Wizard
 
-Version `1.0.0`
+Version `1.1.0`
 
 Wordle Wizard is a browser-based Wordle advisor powered by a Rust solver compiled to WebAssembly. It is built to help you play Wordle on another site by entering your guesses and feedback, then inspecting the remaining candidate answers and recommended next guesses.
 
@@ -60,6 +60,12 @@ The status bar at the top reports what the engine is doing right now.
 - `Error` in red means the last operation failed.
 
 If the solver takes time on a larger dictionary, the status bar is the authoritative place to see whether the app is still processing.
+
+## Privacy
+
+Wordle Wizard does not collect analytics, does not send your guesses or puzzle history to any server, and does not store personal data remotely.
+
+The only persistent storage used by the app is your browser's local storage for cached dictionaries that you explicitly fetch. Those cached dictionaries stay on your device unless you remove them or clear browser storage.
 
 ## Starting A New Puzzle
 
@@ -126,3 +132,5 @@ GitHub Actions builds the single-file HTML release asset on version tag pushes f
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+
+Copyright 2026 Numerius Engineering LLC - MIT License - numerius.engineering@gmail.com

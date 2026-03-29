@@ -244,6 +244,16 @@ export function bootApp({ engine }) {
     });
   }
 
+  function setGuessFromWord(word) {
+    elements.guessInput.value = word.toLowerCase();
+    syncEditorLetters();
+    elements.guessInput.focus();
+    elements.guessInput.setSelectionRange(
+      elements.guessInput.value.length,
+      elements.guessInput.value.length,
+    );
+  }
+
   function renderHistory(snapshot) {
     elements.historyList.replaceChildren();
 
@@ -282,6 +292,9 @@ export function bootApp({ engine }) {
 
     for (const recommendation of recommendations) {
       const row = document.createElement("tr");
+      row.className = "clickable-word";
+      row.dataset.word = recommendation.word;
+      row.title = `Use ${recommendation.word} as the current guess`;
       row.innerHTML = `
         <td>${recommendation.word}</td>
         <td>${recommendation.score.toFixed(3)}</td>
@@ -298,6 +311,8 @@ export function bootApp({ engine }) {
     for (const word of candidates.words) {
       const pill = document.createElement("span");
       pill.className = "pill";
+      pill.dataset.word = word;
+      pill.title = `Use ${word} as the current guess`;
       pill.textContent = word;
       elements.candidateList.append(pill);
     }
@@ -444,6 +459,26 @@ export function bootApp({ engine }) {
     const currentIndex = FEEDBACK_SEQUENCE.indexOf(tile.dataset.state);
     const nextIndex = (currentIndex + 1) % FEEDBACK_SEQUENCE.length;
     tile.dataset.state = FEEDBACK_SEQUENCE[nextIndex];
+  });
+
+  elements.recommendationsBody.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-word]");
+    if (!row) {
+      return;
+    }
+
+    setGuessFromWord(row.dataset.word);
+    setIdle(`Idle. Loaded ${row.dataset.word} into the current guess.`);
+  });
+
+  elements.candidateList.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-word]");
+    if (!item) {
+      return;
+    }
+
+    setGuessFromWord(item.dataset.word);
+    setIdle(`Idle. Loaded ${item.dataset.word} into the current guess.`);
   });
 
   elements.guessForm.addEventListener("submit", async (event) => {

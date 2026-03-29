@@ -304,6 +304,14 @@
         font-weight: 600;
       }
 
+      .clickable-word {
+        cursor: pointer;
+      }
+
+      .clickable-word:hover {
+        background: rgba(17, 119, 187, 0.12);
+      }
+
       .candidates,
       .cache-list {
         display: flex;
@@ -316,6 +324,11 @@
         border-radius: 999px;
         background: var(--accent-soft);
         border: 1px solid rgba(17, 119, 187, 0.3);
+        cursor: pointer;
+      }
+
+      .pill:hover {
+        background: rgba(17, 119, 187, 0.32);
       }
 
       details {
@@ -386,6 +399,16 @@
 
       code {
         font-family: "IBM Plex Mono", "Consolas", monospace;
+      }
+
+      .footer {
+        margin: 22px auto 0;
+        max-width: 1260px;
+        padding: 16px 24px 28px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.95rem;
+        text-align: center;
       }
 
       @media (max-width: 960px) {
@@ -604,9 +627,20 @@
               <p>If the solver feels latent on a larger dictionary, watch the status bar first. That is the intended place to tell whether the app is still processing versus waiting for user input.</p>
             </div>
           </section>
+
+          <section class="panel help-panel">
+            <h3>Privacy</h3>
+            <div class="help-copy">
+              <p>Wordle Wizard does not collect analytics, does not send your guesses or puzzle history to any server, and does not store personal data remotely.</p>
+              <p>The only persistent storage used by the app is your browser's local storage for cached dictionaries that you explicitly fetch. Those cached dictionaries stay on your device unless you remove them or clear browser storage.</p>
+            </div>
+          </section>
         </div>
       </section>
     </main>
+    <footer class="footer">
+      Wordle Wizard v1.1.0 | Copyright 2026 Numerius Engineering LLC - MIT License - numerius.engineering@gmail.com
+    </footer>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
