@@ -9,7 +9,7 @@ Wordle Wizard is a browser-based Wordle advisor powered by a Rust solver compile
 The easiest way to use the app is to download the single self-contained HTML file from GitHub Releases:
 
 1. Open the repository's `Releases` page.
-2. Download `wordle_wizard_single_file.html` from the latest release assets.
+2. Download the versioned single-file asset, for example `wordle_wizard_v1.1.0_single_file.html`, from the latest release assets.
 3. Open that HTML file in a modern browser.
 
 No separate install step is required for the release build. The HTML file contains the app UI, JavaScript, and bundled WASM engine in one file.
@@ -123,7 +123,7 @@ Then open:
 
 This writes:
 
-- `dist/wordle_wizard_single_file.html`
+- `dist/wordle_wizard_v1.1.0_single_file.html`
 
 ## Releases
 

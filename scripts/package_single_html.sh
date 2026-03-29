@@ -3,16 +3,18 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
+VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 PKG_JS="$ROOT_DIR/pkg/wordle_wizard.js"
 PKG_WASM="$ROOT_DIR/pkg/wordle_wizard_bg.wasm"
 APP_JS="$ROOT_DIR/web/app.js"
 WORKER_CORE_JS="$ROOT_DIR/web/engine_worker_core.js"
 INDEX_HTML="$ROOT_DIR/web/index.html"
-OUTPUT_HTML="$DIST_DIR/wordle_wizard_single_file.html"
+OUTPUT_HTML="$DIST_DIR/wordle_wizard_v${VERSION}_single_file.html"
 
 "$ROOT_DIR/scripts/build_wasm.sh"
 
 mkdir -p "$DIST_DIR"
+rm -f "$DIST_DIR/wordle_wizard_single_file.html"
 
 node - <<'NODE' "$INDEX_HTML" "$PKG_JS" "$APP_JS" "$WORKER_CORE_JS" "$PKG_WASM" "$OUTPUT_HTML"
 const fs = require("fs");

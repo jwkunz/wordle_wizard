@@ -37,5 +37,5 @@ jobs:
       - name: Publish GitHub release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/wordle_wizard_single_file.html
+          files: dist/wordle_wizard_v*_single_file.html
           generate_release_notes: true
